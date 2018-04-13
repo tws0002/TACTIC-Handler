@@ -1205,7 +1205,8 @@ class File(object):
             return self
 
     def open_file(self):
-        gf.open_file_associated(self.get_full_abs_path())
+        maya_info = self.get_metadata().get('app_info').get('v')
+        gf.open_file_associated(self.get_full_abs_path(),maya_info)
 
     def open_folder(self):
         gf.open_folder(self.get_full_abs_path())
@@ -2016,7 +2017,7 @@ def checkin_file(search_key, context, snapshot_type='file', is_revision=False, d
                 progress_bar,
                 data_dict['virtual_snapshot'],
                 repo_name,
-                update_versionless,
+                data_dict['update_versionless'],
                 create_icon,
                 selected_objects=selected_objects,
                 ext_type=ext_type,
@@ -2033,7 +2034,7 @@ def checkin_file(search_key, context, snapshot_type='file', is_revision=False, d
                 is_revision=is_revision,
                 description=data_dict['description'],
                 version=version,
-                update_versionless=update_versionless,
+                update_versionless=data_dict['update_versionless'],
                 keep_file_name=keep_file_name,
                 repo_name=repo_name,
                 virtual_snapshot=data_dict['virtual_snapshot'],
