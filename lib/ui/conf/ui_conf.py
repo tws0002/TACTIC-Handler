@@ -2,24 +2,34 @@
 
 # Form implementation generated from reading ui file 'conf/ui_conf.ui'
 #
-# Created: Fri Sep  9 19:16:52 2016
+# Created: Thu Apr 27 14:15:16 2017
 #      by: pyside-uic 0.2.13 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
 
-from PySide import QtCore, QtGui
+from lib.side.Qt import QtWidgets as QtGui
+from lib.side.Qt import QtGui as Qt4Gui
+from lib.side.Qt import QtCore
+
 
 class Ui_configuration_dialog(object):
     def setupUi(self, configuration_dialog):
         configuration_dialog.setObjectName("configuration_dialog")
         configuration_dialog.setWindowModality(QtCore.Qt.ApplicationModal)
-        configuration_dialog.resize(412, 348)
+        configuration_dialog.resize(503, 319)
         configuration_dialog.setSizeGripEnabled(True)
         configuration_dialog.setModal(True)
         self.gridLayout_6 = QtGui.QGridLayout(configuration_dialog)
         self.gridLayout_6.setObjectName("gridLayout_6")
         self.configToolBox = QtGui.QToolBox(configuration_dialog)
-        self.configToolBox.setStyleSheet("QToolBox::tab {\n"
+        palette = Qt4Gui.QPalette()
+        self.configToolBox.setPalette(palette)
+        self.configToolBox.setStyleSheet("QToolBox > *,\n"
+"QToolBox > QScrollArea > #qt_scrollarea_viewport > QWidget {\n"
+"    background-color: rgba(128, 128, 128, 48);\n"
+"}\n"
+"\n"
+"QToolBox::tab {\n"
 "    border-style: outset;\n"
 "    border-width: 1px;\n"
 "    border-color:  rgba(75, 75, 75, 75);\n"
@@ -41,7 +51,7 @@ class Ui_configuration_dialog(object):
 "}")
         self.configToolBox.setObjectName("configToolBox")
         self.serverPage = QtGui.QWidget()
-        self.serverPage.setGeometry(QtCore.QRect(0, 0, 394, 90))
+        self.serverPage.setGeometry(QtCore.QRect(0, 0, 485, 90))
         self.serverPage.setObjectName("serverPage")
         self.serverPageLayout = QtGui.QVBoxLayout(self.serverPage)
         self.serverPageLayout.setContentsMargins(6, 6, 6, 6)
@@ -54,27 +64,20 @@ class Ui_configuration_dialog(object):
         self.projectPageLayout.setContentsMargins(6, 6, 6, 6)
         self.projectPageLayout.setObjectName("projectPageLayout")
         self.configToolBox.addItem(self.projectPage, "")
-        self.checkoutPage = QtGui.QWidget()
-        self.checkoutPage.setGeometry(QtCore.QRect(0, 0, 100, 30))
-        self.checkoutPage.setObjectName("checkoutPage")
-        self.checkoutPageLayout = QtGui.QVBoxLayout(self.checkoutPage)
-        self.checkoutPageLayout.setContentsMargins(6, 6, 6, 6)
-        self.checkoutPageLayout.setObjectName("checkoutPageLayout")
-        self.configToolBox.addItem(self.checkoutPage, "")
-        self.checkinPage = QtGui.QWidget()
-        self.checkinPage.setGeometry(QtCore.QRect(0, 0, 100, 30))
-        self.checkinPage.setObjectName("checkinPage")
-        self.checkinPageLayout = QtGui.QVBoxLayout(self.checkinPage)
+        self.checkinOutOptionsPage = QtGui.QWidget()
+        self.checkinOutOptionsPage.setGeometry(QtCore.QRect(0, 0, 100, 30))
+        self.checkinOutOptionsPage.setObjectName("checkinOutOptionsPage")
+        self.checkinPageLayout = QtGui.QVBoxLayout(self.checkinOutOptionsPage)
         self.checkinPageLayout.setContentsMargins(6, 6, 6, 6)
         self.checkinPageLayout.setObjectName("checkinPageLayout")
-        self.configToolBox.addItem(self.checkinPage, "")
-        self.checkinOutPage = QtGui.QWidget()
-        self.checkinOutPage.setGeometry(QtCore.QRect(0, 0, 100, 30))
-        self.checkinOutPage.setObjectName("checkinOutPage")
-        self.checkinOutPageLayout = QtGui.QVBoxLayout(self.checkinOutPage)
+        self.configToolBox.addItem(self.checkinOutOptionsPage, "")
+        self.checkinOutAppPage = QtGui.QWidget()
+        self.checkinOutAppPage.setGeometry(QtCore.QRect(0, 0, 100, 30))
+        self.checkinOutAppPage.setObjectName("checkinOutAppPage")
+        self.checkinOutPageLayout = QtGui.QVBoxLayout(self.checkinOutAppPage)
         self.checkinOutPageLayout.setContentsMargins(6, 6, 6, 6)
         self.checkinOutPageLayout.setObjectName("checkinOutPageLayout")
-        self.configToolBox.addItem(self.checkinOutPage, "")
+        self.configToolBox.addItem(self.checkinOutAppPage, "")
         self.globalCofigPage = QtGui.QWidget()
         self.globalCofigPage.setGeometry(QtCore.QRect(0, 0, 100, 30))
         self.globalCofigPage.setObjectName("globalCofigPage")
@@ -91,8 +94,8 @@ class Ui_configuration_dialog(object):
         self.configToolBox.addItem(self.currentEnvironmentPage, "")
         self.gridLayout_6.addWidget(self.configToolBox, 0, 0, 1, 1)
         self.buttonBox = QtGui.QDialogButtonBox(configuration_dialog)
-        self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Close|QtGui.QDialogButtonBox.Reset|QtGui.QDialogButtonBox.RestoreDefaults|QtGui.QDialogButtonBox.Save)
-        self.buttonBox.setCenterButtons(False)
+        self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
+        self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Apply|QtGui.QDialogButtonBox.Close|QtGui.QDialogButtonBox.Reset|QtGui.QDialogButtonBox.RestoreDefaults|QtGui.QDialogButtonBox.SaveAll)
         self.buttonBox.setObjectName("buttonBox")
         self.gridLayout_6.addWidget(self.buttonBox, 1, 0, 1, 1)
 
@@ -102,12 +105,11 @@ class Ui_configuration_dialog(object):
         QtCore.QMetaObject.connectSlotsByName(configuration_dialog)
 
     def retranslateUi(self, configuration_dialog):
-        configuration_dialog.setWindowTitle(QtGui.QApplication.translate("configuration_dialog", "TACTIC Handler configuration", None, QtGui.QApplication.UnicodeUTF8))
-        self.configToolBox.setItemText(self.configToolBox.indexOf(self.serverPage), QtGui.QApplication.translate("configuration_dialog", "TACTIC Server", None, QtGui.QApplication.UnicodeUTF8))
-        self.configToolBox.setItemText(self.configToolBox.indexOf(self.projectPage), QtGui.QApplication.translate("configuration_dialog", "Project", None, QtGui.QApplication.UnicodeUTF8))
-        self.configToolBox.setItemText(self.configToolBox.indexOf(self.checkoutPage), QtGui.QApplication.translate("configuration_dialog", "Checkout", None, QtGui.QApplication.UnicodeUTF8))
-        self.configToolBox.setItemText(self.configToolBox.indexOf(self.checkinPage), QtGui.QApplication.translate("configuration_dialog", "Checkin", None, QtGui.QApplication.UnicodeUTF8))
-        self.configToolBox.setItemText(self.configToolBox.indexOf(self.checkinOutPage), QtGui.QApplication.translate("configuration_dialog", "Checkin/Checkout display", None, QtGui.QApplication.UnicodeUTF8))
-        self.configToolBox.setItemText(self.configToolBox.indexOf(self.globalCofigPage), QtGui.QApplication.translate("configuration_dialog", "Global Config", None, QtGui.QApplication.UnicodeUTF8))
-        self.configToolBox.setItemText(self.configToolBox.indexOf(self.currentEnvironmentPage), QtGui.QApplication.translate("configuration_dialog", "Current Environment Options", None, QtGui.QApplication.UnicodeUTF8))
+        configuration_dialog.setWindowTitle(QtGui.QApplication.translate("configuration_dialog", "TACTIC Handler configuration", None))
+        self.configToolBox.setItemText(self.configToolBox.indexOf(self.serverPage), QtGui.QApplication.translate("configuration_dialog", "TACTIC Server", None))
+        self.configToolBox.setItemText(self.configToolBox.indexOf(self.projectPage), QtGui.QApplication.translate("configuration_dialog", "Project", None))
+        self.configToolBox.setItemText(self.configToolBox.indexOf(self.checkinOutOptionsPage), QtGui.QApplication.translate("configuration_dialog", "Checkin/Checkout Options", None))
+        self.configToolBox.setItemText(self.configToolBox.indexOf(self.checkinOutAppPage), QtGui.QApplication.translate("configuration_dialog", "Checkin/Checkout Appearance", None))
+        self.configToolBox.setItemText(self.configToolBox.indexOf(self.globalCofigPage), QtGui.QApplication.translate("configuration_dialog", "Global Config", None))
+        self.configToolBox.setItemText(self.configToolBox.indexOf(self.currentEnvironmentPage), QtGui.QApplication.translate("configuration_dialog", "Current Environment Options", None))
 

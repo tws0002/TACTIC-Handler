@@ -4,25 +4,32 @@
 
 import os
 import sys
+import shutil
 import traceback
 import urlparse
 import collections
+import json
 from lib.side.bs4 import BeautifulSoup
-import PySide.QtGui as QtGui
-import PySide.QtCore as QtCore
-import environment as env
+from lib.side.Qt import QtWidgets as QtGui
+from lib.side.Qt import QtGui as Qt4Gui
+from lib.side.Qt import QtCore
+import lib.proxy as proxy
+from lib.environment import env_mode, env_server, env_inst, env_tactic
 import global_functions as gf
+import tactic_query as tq
 import lib.ui_classes.ui_misc_classes as ui_misc_classes
+import lib.ui_classes.ui_dialogs_classes as ui_dialogs_classes
 import side.client.tactic_client_lib as tactic_client_lib
 
 
-if env.Mode.get == 'maya':
-    import maya.cmds as cmds
+if env_mode.get_mode() == 'maya':
+    import maya_functions as mf
+    reload(mf)
 
 
 class ServerThread(QtCore.QThread):
     def __init__(self, parent=None):
-        QtCore.QThread.__init__(self, parent=parent)
+        super(ServerThread, self).__init__(parent=parent)
 
         self.kwargs = None
         self.result = None
@@ -76,7 +83,9 @@ def get_server_thread(kwargs_dict, runnable_func, connected_func, parent=None):
     return thread
 
 
-def treat_result(thread):
+def treat_result(thread, silent=False):
+    if silent:
+        return thread
     if thread.isFailed():
         print 'ERROR TREATING'
         return error_handle(thread)
@@ -84,18 +93,28 @@ def treat_result(thread):
         return thread
 
 
-def server_auth(host, project, login, password, get_ticket=False):
+def server_auth(host, project=None, login=None, password=None, site=None, get_ticket=False):
     server = tactic_client_lib.TacticServerStub.get(protocol='xmlrpc', setup=False)
+    if env_server.get_proxy()['enabled']:
+        transport = proxy.UrllibTransport()
+        server.set_transport(transport)
+    else:
+        if server.transport:
+            server.transport.update_proxy()
+        server.set_transport(None)
+
     server.set_server(host)
     server.set_project(project)
-    ticket = env.Env.get_ticket()
+    server.set_site(site)
+
+    ticket = env_server.get_ticket()
     if not ticket or get_ticket:
-        ticket = server.get_ticket(login, password)
+        ticket = server.get_ticket(login, password, site)
         if type(ticket) == dict:
             if ticket.get('exception'):
                 return server
         else:
-            env.Env.set_ticket(ticket)
+            env_server.set_ticket(ticket)
 
     server.set_ticket(ticket)
 
@@ -104,10 +123,11 @@ def server_auth(host, project, login, password, get_ticket=False):
 
 def server_start(get_ticket=False):
     server = server_auth(
-        env.Env.get_server(),
-        env.Inst.current_project,
-        env.Env.get_user(),
+        env_server.get_server(),
+        env_inst.get_current_project(),
+        env_server.get_user(),
         '',
+        env_server.get_site()['site_name'],
         get_ticket=get_ticket,
     )
     return server
@@ -145,14 +165,26 @@ def show_message_predefined(title, message, stacktrace=None, buttons=None, paren
     if stacktrace:
         layout = QtGui.QVBoxLayout()
 
-        collapse_wdg = ui_misc_classes.Ui_collapsableWidget()
+        collapse_wdg = ui_misc_classes.Ui_collapsableWidget(state=True)
         collapse_wdg.setLayout(layout)
         collapse_wdg.setText('Hide Stacktrace')
         collapse_wdg.setCollapsedText('Show Stacktrace')
-        collapse_wdg.setCollapsed(True)
 
         msb_layot = message_box.layout()
+
+        wdg_list = []
+
+        for i in range(msb_layot.count()):
+            wdg = msb_layot.itemAt(i).widget()
+            if wdg:
+                wdg_list.append(wdg)
+
+        msb_layot.addWidget(wdg_list[0], 0, 0)
+        msb_layot.addWidget(wdg_list[1], 0, 1)
+        msb_layot.addWidget(wdg_list[2], 2, 1)
         msb_layot.addWidget(collapse_wdg, 1, 1)
+
+        # msb_layot.addWidget(collapse_wdg, 1, 1)
 
         text_edit = QtGui.QPlainTextEdit()
         text_edit.setMinimumWidth(600)
@@ -168,7 +200,7 @@ def show_message_predefined(title, message, stacktrace=None, buttons=None, paren
 
 
 def catch_error_type(exception):
-    print('Some exception appeared!', str(type(exception)), str(exception))
+    # print('Some exception appeared!', str(type(exception)), unicode(str(exception), 'utf-8', errors='ignore'))
 
     error = 'unknown_error'
 
@@ -204,21 +236,33 @@ def catch_error_type(exception):
     return error
 
 
-def generate_new_ticket(explicit_username=None):
+def generate_new_ticket(explicit_username=None, parent=None):
     login_pass_dlg = QtGui.QMessageBox(
         QtGui.QMessageBox.Question,
         'Updating ticket',
         'Enter Your Login and Password.',
         QtGui.QMessageBox.NoButton,
-        None,
+        parent,
     )
     layout = QtGui.QGridLayout()
 
-    wdg = QtGui.QWidget()
-    wdg.setLayout(layout)
+    widget = QtGui.QWidget()
+    widget.setLayout(layout)
 
     msb_layot = login_pass_dlg.layout()
-    msb_layot.addWidget(wdg, 1, 1)
+
+    # workaround for pyside2
+    wdg_list = []
+
+    for i in range(msb_layot.count()):
+        wdg = msb_layot.itemAt(i).widget()
+        if wdg:
+            wdg_list.append(wdg)
+
+    msb_layot.addWidget(wdg_list[0], 0, 0)
+    msb_layot.addWidget(wdg_list[1], 0, 1)
+    msb_layot.addWidget(wdg_list[2], 2, 1)
+    msb_layot.addWidget(widget, 1, 1)
 
     # Labels
     login_label = QtGui.QLabel('Login: ')
@@ -229,8 +273,9 @@ def generate_new_ticket(explicit_username=None):
     if explicit_username:
         login_line_edit.setText(explicit_username)
     else:
-        login_line_edit.setText(env.Env.get_user())
+        login_line_edit.setText(env_server.get_user())
     pass_line_edit = QtGui.QLineEdit()
+    pass_line_edit.setEchoMode(QtGui.QLineEdit.Password)
 
     layout.addWidget(login_label, 0, 0)
     layout.addWidget(login_line_edit, 0, 1)
@@ -241,13 +286,19 @@ def generate_new_ticket(explicit_username=None):
 
     login_pass_dlg.exec_()
 
-    host = env.Env.get_server()
+    host = env_server.get_server()
     #TODO SOMETHING
     project = 'sthpw'
     login = login_line_edit.text()
     password = pass_line_edit.text()
+    site = env_server.get_site()['site_name']
 
-    thread = get_server_thread(dict(), lambda: server_auth(host, project, login, password, get_ticket=True), server_ping)
+    thread = get_server_thread(
+        dict(),
+        lambda: server_auth(host, project, login, password, site, get_ticket=True),
+        server_ping,
+        parent=parent
+    )
     thread.start()
     treat_result(thread)
     thread.wait()
@@ -256,7 +307,7 @@ def generate_new_ticket(explicit_username=None):
 
 def run_tactic_team_server():
 
-    path = os.path.normpath(env.Env.get_install_dir() + os.sep + os.pardir)
+    path = os.path.normpath(env_server.get_install_dir() + os.sep + os.pardir)
     print('Starting TACTIC Server... Press Retry after server started!', path)
     os.system(path + '/ServerRun.bat')
 
@@ -264,21 +315,24 @@ def run_tactic_team_server():
 def error_handle(thread):
     expected = thread.result['exception']
 
-    error = catch_error_type(expected)
+    error_type = catch_error_type(expected)
 
-    exception_text = 'Exception type: {0},<p>{1}</p><p><b>Catched Error: {2}</b></p>'.format(str(type(expected)),
-                                                                                             str(expected), str(error))
-    if (error == 'connection_refused') or (error == 'connection_timeout'):
-        title = '{0}, {1}'.format("Cannot connect to TACTIC Server!", error)
-        message = '{0}<p>{1}</p>'.format(
-            "<p>Looks like TACTIC Server isn't running! May be You need to set up Right Server port and address</p>"
-            "<p>Start Server? (Only TACTIC Team)</p>",
+    exception_text = u'{0}<p>{1}</p><p><b>Catched Error: {2}</b></p>'.format(
+        unicode(str(expected.__doc__), 'utf-8', errors='ignore'),
+        unicode(str(expected.message), 'utf-8', errors='ignore'),
+        str(error_type))
+
+    if (error_type == 'connection_refused') or (error_type == 'connection_timeout'):
+        title = '{0}, {1}'.format("Cannot connect to TACTIC Server!", error_type)
+        message = u'{0}<p>{1}</p>'.format(
+            u"<p>Looks like TACTIC Server isn't running! May be You need to set up Right Server port and address</p>"
+            u"<p>Start Server? (Only TACTIC Team)</p>",
             exception_text)
         buttons = [('Yes', QtGui.QMessageBox.YesRole),
                    ('No', QtGui.QMessageBox.NoRole),
                    ('Retry', QtGui.QMessageBox.ApplyRole)]
 
-        if not env.Inst.ui_conf:
+        if not env_inst.ui_conf:
             buttons.append(('Open Config', QtGui.QMessageBox.ActionRole))
 
         reply = show_message_predefined(
@@ -299,15 +353,15 @@ def error_handle(thread):
 
         return thread
 
-    if error == 'unknown_error':
-        title = '{0}, {1}'.format("Unknown Error!", error)
-        message = '{0}<p>{1}</p>'.format(
-            "<p>This is no usual type of Exception! See stacktrace for information</p>",
+    if error_type == 'unknown_error':
+        title = u'{0}'.format(unicode(str(expected.__doc__), 'utf-8', errors='ignore'))
+        message = u'{0}<p>{1}</p>'.format(
+            u"<p>This is no usual type of Exception! See stacktrace for information</p>",
             exception_text)
         buttons = [('Ok', QtGui.QMessageBox.NoRole),
                    ('Retry', QtGui.QMessageBox.ApplyRole)]
 
-        if not env.Inst.ui_conf:
+        if not env_inst.ui_conf:
             buttons.append(('Open Config', QtGui.QMessageBox.ActionRole))
 
         reply = show_message_predefined(
@@ -325,15 +379,15 @@ def error_handle(thread):
 
         return thread
 
-    if error == 'ticket_error':
-        title = '{0}, {1}'.format("Ticket Error!", error)
-        message = '{0}<p>{1}</p>'.format(
-            "<p>Wrong ticket, or session may have expired!</p> <p>Generate new ticket?</p>",
+    if error_type == 'ticket_error':
+        title = '{0}, {1}'.format("Ticket Error!", error_type)
+        message = u'{0}<p>{1}</p>'.format(
+            u"<p>Wrong ticket, or session may have expired!</p> <p>Generate new ticket?</p>",
             exception_text)
         buttons = [('Yes', QtGui.QMessageBox.YesRole),
                    ('No', QtGui.QMessageBox.NoRole)]
 
-        if not env.Inst.ui_conf:
+        if not env_inst.ui_conf:
             buttons.append(('Open Config', QtGui.QMessageBox.ActionRole))
 
         reply = show_message_predefined(
@@ -352,15 +406,15 @@ def error_handle(thread):
 
         return thread
 
-    if error == 'no_project_error':
-        title = '{0}, {1}'.format("This Project does not exists!", error)
-        message = '{0}<p>{1}</p>'.format(
-            "<p>You set up wrong Porject Name, or Project not exist!</p> <p>Reset Project to \"sthpw\"?</p>",
+    if error_type == 'no_project_error':
+        title = '{0}, {1}'.format("This Project does not exists!", error_type)
+        message = u'{0}<p>{1}</p>'.format(
+            u"<p>You set up wrong Porject Name, or Project not exist!</p> <p>Reset Project to \"sthpw\"?</p>",
             exception_text)
         buttons = [('Yes', QtGui.QMessageBox.YesRole),
                    ('No', QtGui.QMessageBox.NoRole)]
 
-        if not env.Inst.ui_conf:
+        if not env_inst.ui_conf:
             buttons.append(('Open Config', QtGui.QMessageBox.ActionRole))
 
         reply = show_message_predefined(
@@ -372,21 +426,21 @@ def error_handle(thread):
             message_type='critical',
         )
         if reply == QtGui.QMessageBox.YesRole:
-            env.Env.set_project('sthpw')
-            env.Inst.ui_main.restart_ui_main()
+            env_server.set_project('sthpw')
+            env_inst.ui_main.restart_ui_main()
         if reply == QtGui.QMessageBox.ActionRole:
             thread.result = reply
 
         return thread
 
-    if error == 'login_pass_error':
-        title = '{0}, {1}'.format("Wrong user Login or Password for TACTIC Server!", error)
-        message = '{0}<p>{1}</p>'.format(
-            "<p>You need to open config, and type correct Login and Password!</p>",
+    if error_type == 'login_pass_error':
+        title = '{0}, {1}'.format("Wrong user Login or Password for TACTIC Server!", error_type)
+        message = u'{0}<p>{1}</p>'.format(
+            u"<p>You need to open config, and type correct Login and Password!</p>",
             exception_text)
         buttons = [('Ok', QtGui.QMessageBox.NoRole)]
 
-        if not env.Inst.ui_conf:
+        if not env_inst.ui_conf:
             buttons.append(('Open Config', QtGui.QMessageBox.ActionRole))
 
         reply = show_message_predefined(
@@ -402,14 +456,14 @@ def error_handle(thread):
 
         return thread
 
-    if error == 'sql_connection_error':
-        title = '{0}, {1}'.format("SQL Server Error!", error)
-        message = '{0}<p>{1}</p>'.format(
-            "<p>TACTIC Server can't connect to SQL server, may be SQL Server Down! Or wrong server port/ip </p>",
+    if error_type == 'sql_connection_error':
+        title = '{0}, {1}'.format("SQL Server Error!", error_type)
+        message = u'{0}<p>{1}</p>'.format(
+            u"<p>TACTIC Server can't connect to SQL server, may be SQL Server Down! Or wrong server port/ip </p>",
             exception_text)
         buttons = [('Ok', QtGui.QMessageBox.NoRole)]
 
-        if not env.Inst.ui_conf:
+        if not env_inst.ui_conf:
             buttons.append(('Open Config', QtGui.QMessageBox.ActionRole))
 
         reply = show_message_predefined(
@@ -425,13 +479,13 @@ def error_handle(thread):
 
         return thread
 
-    if error == 'protocol_error':
-        title = '{0}, {1}'.format("Error with the Protocol!", error)
-        message = '{0}<p>{1}</p>'.format("<p>Something wrong!</p>", exception_text)
+    if error_type == 'protocol_error':
+        title = '{0}, {1}'.format("Error with the Protocol!", error_type)
+        message = u'{0}<p>{1}</p>'.format(u"<p>Something wrong!</p>", exception_text)
         buttons = [('Ok', QtGui.QMessageBox.NoRole),
                    ('Retry', QtGui.QMessageBox.ApplyRole)]
 
-        if not env.Inst.ui_conf:
+        if not env_inst.ui_conf:
             buttons.append(('Open Config', QtGui.QMessageBox.ActionRole))
 
         reply = show_message_predefined(
@@ -460,89 +514,83 @@ def server_ping():
         return False
 
 
+def server_fast_ping():
+    server = tactic_client_lib.TacticServerStub.get(protocol='xmlrpc', setup=False)
+    if env_server.get_proxy()['enabled']:
+        transport = proxy.UrllibTransport()
+        server.set_transport(transport)
+    else:
+        if server.transport:
+            server.transport.update_proxy()
+        server.set_transport(None)
+    server.set_server(env_server.get_server())
+
+    if server.fast_ping() == 'OK':
+        del server
+        return 'ping_ok'
+    else:
+        del server
+        return 'ping_fail'
+
+
 # Projects related classes
 class Project(object):
     def __init__(self, project):
 
         self.info = project
         self.stypes = None
+        self.workflow = None
+
+    def get_code(self):
+        return self.info.get('code')
 
     def get_stypes(self):
-
-        self.stypes = self.query_search_types()
-        return self.stypes
-
-    def query_search_types(self):
-        # getting all stypes
-
         # import time
         #
         # start = time.time()
         # print("start")
-        #
-        # for i in range(20):
-        #     server_start().query('sthpw/schema', [('code', 'the_pirate')])
-        #
+
+        self.stypes = self.query_search_types()
+
         # end = time.time()
         # print(end - start)
 
-        empty_tab = [{'__search_key__': u'sthpw/search_object?code=empty/empty',
-                      'class_name': u'pyasm.search.SObject',
-                      'code': u'empty/empty',
-                      'color': None,
-                      'database': u'{project}',
-                      'default_layout': u'table',
-                      'description': None,
-                      'id': 84,
-                      'id_column': None,
-                      'message_event': None,
-                      'metadata_parser': None,
-                      'namespace': u'empty',
-                      'schema': u'public',
-                      'search_type': u'empty/empty',
-                      'table_name': u'characters',
-                      'title': u'empty',
-                      'type': None}, ]
+        return self.stypes
 
-        search_type = 'sthpw/search_object'
-        project_code = self.info.get('code')
-        namespace = [self.info.get('type'), project_code]
+    def query_search_types(self):
 
-        filters = [('namespace', namespace)]
+        kwargs = {
+            'project_code': self.info.get('code'),
+            'namespace': self.info.get('type')
+        }
 
-        # if server:
-        all_stypes = server_start().query(search_type, filters)
+        code = tq.prepare_serverside_script(tq.query_search_types_extended, kwargs, return_dict=True)
 
-        if not all_stypes:
-            all_stypes = server_start().query(search_type, filters)
-            if not all_stypes:
-                all_stypes = empty_tab
+        result = server_start().execute_python_script('', kwargs=code)
+        stypes = json.loads(result['info']['spt_ret_val'])
 
-        # getting pipeline process
-        stypes_codes = []
-        for stype in all_stypes:
-            stypes_codes.append(stype['code'])
+        schema = stypes.get('schema')
+        # TODO site-wide pipelines
+        pipelines = stypes.get('pipelines')
+        stypes = stypes.get('stypes')
 
-        search_type = 'sthpw/pipeline'
+        # from pprint import pprint
 
-        filters = [('search_type', stypes_codes), ('project_code', project_code)]
-        stypes_pipelines = server_start().query(search_type, filters)
-
-        # getting project schema
-        schema = server_start().query('sthpw/schema', [('code', project_code)])
+        # pprint(schema)
+        # pprint(pipelines)
+        # pprint(stypes)
 
         if schema:
             prj_schema = schema[0]['schema']
         else:
             prj_schema = None
 
-        if not (stypes_pipelines or schema):
+        if not (pipelines or schema):
             return None
         else:
-            return self.get_all_search_types(all_stypes, stypes_pipelines, prj_schema)
+            return self.get_all_search_types(stypes, pipelines, prj_schema)
 
-    @staticmethod
-    def get_all_search_types(stype_list, process_list, schema):
+    def get_all_search_types(self, stype_list, process_list, schema):
 
         pipeline = BeautifulSoup(schema, 'html.parser')
         all_connectionslist = []
@@ -566,18 +614,22 @@ class Project(object):
 
             dct[pipe.attrs['name']].append(conn)
 
-        stypes_objects = collections.OrderedDict()
+        # getting workflow here
+        self.workflow = Workflow(process_list)
 
+        # getting stypes processes here
+        stypes_objects = collections.OrderedDict()
         for stype in stype_list:
-            stype_process = None
+            stype_process = collections.OrderedDict()
             stype_schema = dct.get(stype['code'])
 
             for process in process_list:
                 if dct.get(stype['code']):
                     if process['search_type'] == dct.get(stype['code'])[0]['search_type']['name']:
-                        stype_process = process
-
-            stype_obj = SType(stype, stype_schema, stype_process)
+                        stype_process[process['code']] = process
+            # print stype_process
+            stype_obj = SType(stype, stype_schema, stype_process, project=self)
+            # print stype_process
             stypes_objects[stype['code']] = stype_obj
 
         return stypes_objects
@@ -597,20 +649,45 @@ class SType(object):
     .pipeline.process['Blocking'].get('children')
 
     """
-    def __init__(self, stype, schema=None, process=None):
+    def __init__(self, stype, schema=None, pipelines=None, project=None):
 
         self.info = stype
-
-        if process:
-            self.pipeline = Pipeline(process)
-        else:
-            self.pipeline = None
+        self.project = project
+        self.schema = None
+        self.pipeline = self.__init_pipelines(pipelines)
 
         if schema:
             self.schema = Schema(schema)
-        else:
-            self.schema = None
 
+    @staticmethod
+    def __init_pipelines(pipelines):
+
+        ready_pipeline = collections.OrderedDict()
+        if pipelines:
+            for key, pipeline in pipelines.iteritems():
+                ready_pipeline[key] = Pipeline(pipeline)
+
+        if ready_pipeline:
+            return ready_pipeline
+
+    def get_pretty_name(self):
+        title = self.info.get('title')
+        if title:
+            return title.title()
+        else:
+            title = self.info.get('code').split('/')[0]
+            if title:
+                return title.title()
+            else:
+                return self.info['table_name'].title()
+
+    def get_stype_color(self, fmt='rgb', alpha=None, tuple=False):
+        color = self.info['color']
+        if color:
+            if fmt == 'rgb':
+                return gf.hex_to_rgb(color, alpha=alpha, tuple=tuple)
+            else:
+                return color
 
 class Schema(object):
     def __init__(self, schema_dict):
@@ -631,20 +708,59 @@ class Schema(object):
         return self.__schema_dict[1].get('children')
 
 
+class Workflow(object):
+    def __init__(self, pipeline):
+
+        self.__pipeline_list = pipeline
+
+    def get_child_pipeline_by_process_code(self, parent_pipeline, process):
+        parent_process = None
+        if parent_pipeline.processes:
+            for proc in parent_pipeline.processes:
+                if proc['process'] == process:
+                    parent_process = proc
+        return self.get_pipeline_by_parent(parent_process)
+
+    def get_pipeline_by_parent(self, parent_process):
+        for pipe in self.__pipeline_list:
+            if pipe['parent_process'] == parent_process['code']:
+                return Pipeline(pipe)
+
+    def get_by_stype(self):
+        pass
+
+    def get_pipeline(self):
+
+        from pprint import pprint
+
+        for pipe in self.__pipeline_list:
+            pprint(pipe)
+
+        return self.__pipeline_list
+
+
 class Pipeline(object):
     def __init__(self, process):
 
         self.__process_dict = process
 
-        self.process = collections.defaultdict(list)
+        self.process = collections.OrderedDict()
 
         self.get_pipeline()
+        self.processes = self.get_processes()
         self.info = self.get_info()
 
+    def get_processes(self):
+        return self.__process_dict['stypes_processes']
+
     def get_info(self):
-        info = self.__process_dict
-        del info['pipeline']
-        return info
+        return self.__process_dict
+
+    def get_process(self, process):
+        # what if we have duplicated processes?
+        for proc in self.processes:
+            if proc['process'] == process:
+                return proc
 
     def get_pipeline(self):
 
@@ -656,8 +772,6 @@ class Pipeline(object):
 
         for pipe in pipeline.find_all(name='process'):
             self.process[pipe.attrs.get('name')] = pipe.attrs
-
-            # print pipe
 
             for connect in all_connectionslist:
                 if pipe.attrs['name'] == connect['from']:
@@ -776,8 +890,16 @@ class SObject(object):
 
     # Query snapshots to update current
     def update_snapshots(self):
-        snapshot_dict = query_snapshots(self.all_process, self.info['code'])
+        import time
+
+        start = time.time()
+        print("start")
+
+        snapshot_dict = self.query_snapshots(self.info['code'])
         self.init_snapshots(snapshot_dict)
+
+        end = time.time()
+        print(end - start)
 
     # Initial Snapshots by process without query
     def init_snapshots(self, snapshot_dict):
@@ -809,6 +931,29 @@ class SObject(object):
 
         for process in process_set:
             self.notes[process] = Process(notes_list, process, True)
+
+    def get_search_key(self):
+
+        return self.info.get('__search_key__')
+
+    def delete_sobject(self, include_dependencies=False, list_dependencies=None):
+
+        snapshot_del_confirm = sobject_delete_confirm(self.get_search_key())
+        if snapshot_del_confirm:
+            include_dependencies = True
+            list_dependencies = {
+                'related_types': ['sthpw/file']
+            }
+
+            kwargs = {
+                'search_key': self.get_search_key(),
+                'include_dependencies': include_dependencies,
+            }
+            code = tq.prepare_serverside_script(tq.delete_sobject, kwargs, return_dict=True)
+            print code['code']
+            result = server_start().execute_python_script('', kwargs=code)
+
+            return result['info']['spt_ret_val']
 
 
 class Process(object):
@@ -859,32 +1004,231 @@ class Snapshot(SObject, object):
     def __init__(self, snapshot):
         super(self.__class__, self).__init__(snapshot)
 
-        self.files = collections.defaultdict(list)
-        for fl in snapshot['__files__']:
-            self.files[fl['type']].append(fl)
+        self.__files = snapshot['__files__']
+        self.files = collections.OrderedDict()
+
+        self.files_objects = None
+        self.preview_files_objects = None
+
+        for fl in self.__files:
+            self.files.setdefault(fl['type'], []).append(fl)
 
         self.snapshot = snapshot
         # delete unused big entries
         del self.snapshot['__files__'], self.snapshot['snapshot']
 
+    def get_files(self):
+        return self.files
+
+    def get_code(self):
+        return self.snapshot.get('code')
+
+    def get_search_key(self):
+        return self.snapshot['__search_key__']
+
+    def get_files_objects(self, group_by=None):
+        if not group_by:
+            # if self.files_objects:
+            #     return self.files_objects
+
+            files_objects = []
+            for fl in self.__files:
+                files_objects.append(File(fl, self))
+        else:
+            files_objects = collections.OrderedDict()
+            for fl in self.__files:
+                files_objects.setdefault(fl[group_by], []).append(File(fl, self))
+
+        self.files_objects = files_objects
+
+        return self.files_objects
+
+    def get_previewable_files_objects(self):
+        if self.preview_files_objects:
+            return self.preview_files_objects
+
+        files_objects = self.get_files_objects()
+        preview_objects = []
+        for fo in files_objects:
+            if fo.get_type() not in ['icon', 'web']:
+                if fo.is_previewable():
+                    preview_objects.append(fo)
+
+        self.preview_files_objects = preview_objects
+        return preview_objects
+
+    def get_snapshot(self):
+        return self.snapshot
+
+    def get_version(self):
+        return self.snapshot.get('version')
+
+    def is_latest(self):
+        return self.snapshot.get('is_latest')
+
+    def is_versionless(self):
+        if self.get_version() == -1:
+            return True
+        else:
+            return False
+
+
+class File(object):
+    def __init__(self, file_dict, snapshot=None):
+
+        self.__file = file_dict
+        self.__snapshot = snapshot
+        self.previewable = False
+        self.meta_file_object = False
+        self.get_meta_file_object()
+
+    def get_dict(self):
+        return self.__file
+
+    def get_search_key(self):
+        return self.__file['__search_key__']
+
+    def get_file_size(self, check_real_size=False):
+        return self.__file['st_size']
+
+    def get_snapshot(self):
+        return self.__snapshot
+
+    def get_metadata(self):
+        return self.__file.get('metadata')
+
+    def get_meta_file_object(self):
+        file_object = None
+        if self.get_metadata():
+            match_template = gf.MatchTemplate()
+            file_object = match_template.init_from_tactic_file_object(self)
+
+        if file_object:
+            self.meta_file_object = True
+            return file_object.values()[0][0]
+
+    def is_meta_file_obj(self):
+        return self.meta_file_object
+
+    def get_type(self):
+        return self.__file['type']
+
+    def get_base_type(self):
+        return self.__file['base_type']
+
+    def get_ext(self):
+        ext = gf.extract_extension(self.__file['file_name'])
+        return ext[0]
+
+    def get_filename_with_ext(self):
+        return self.__file['file_name']
+
+    def get_filename(self):
+        filename = self.__file['file_name']
+        ext = gf.extract_extension(filename)
+        if ext:
+            return filename.replace('.' + ext[0], '')
+        else:
+            return filename
+
+    def get_filename_no_type_prefix(self):
+        # guess right only if type at the end
+        filename = self.get_filename()
+        prefix = self.__file['type']
+        if prefix:
+            if filename.endswith(prefix):
+                no_prefix_name = filename.split('_')
+                return '_'.join(no_prefix_name[:-1])
+            else:
+                return filename
+        else:
+            return filename
+
+    def get_abs_path(self):
+        snapshot = self.__snapshot.get_snapshot()
+        repo_name = snapshot.get('repo')
+        if not repo_name:
+            repo_name = 'base'
+
+        if repo_name:
+            asset_dir = env_tactic.get_base_dir(repo_name)['value'][0]
+        else:
+            asset_dir = env_tactic.get_base_dir('client')['value'][0]
+
+        abs_path = gf.form_path(
+            '{0}/{1}'.format(asset_dir, self.__file['relative_dir']))
+        return abs_path
+
+    def get_full_abs_path(self):
+        return gf.form_path('{0}/{1}'.format(self.get_abs_path(), self.__file['file_name']))
+
+    def is_exists(self):
+        return os.path.exists(self.get_full_abs_path())
+
+    def is_previewable(self):
+        if self.previewable:
+            return True
+
+        previewable = False
+        ext = gf.extract_extension(self.__file['file_name'])
+        if self.__file['type'] in ['icon', 'web', 'image', 'playblast']:
+            return True
+        elif ext[3] == 'preview':
+            previewable = True
+
+        self.previewable = previewable
+
+        return previewable
+
+    def get_web_preview(self):
+        # return web file object related to this file
+        if self.__file['type'] != 'web':
+            files = self.__snapshot.get_files_objects()
+            filename = self.get_filename_no_type_prefix()
+            for fl in files:
+                if fl.get_type() == 'web':
+                    if filename in fl.get_filename():
+                        return fl
+        else:
+            return self
+
+    def get_icon_preview(self):
+        # return icon file object related to this file
+        if self.__file['type'] != 'icon':
+            files = self.__snapshot.get_files_objects()
+            filename = self.get_filename_no_type_prefix()
+            for fl in files:
+                if fl.get_type() == 'icon':
+                    if filename in fl.get_filename():
+                        return fl
+        else:
+            return self
+
+    def open_file(self):
+        maya_info = self.get_metadata().get('app_info').get('v')
+        gf.open_file_associated(self.get_full_abs_path(),maya_info)
+
+    def open_folder(self):
+        gf.open_folder(self.get_full_abs_path())
+
 # End of SObject Class
 
-
-def query_projects():
-    server = server_start()
-    search_type = 'sthpw/project'
-    filters = []
-    projects = server.query(search_type, filters)
-
-    exclude_list = ['sthpw', 'unittest', 'admin']
-
-    projects_by_category = collections.defaultdict(list)
-
-    for project in projects:
-        if project['code'] not in exclude_list:
-            projects_by_category[project['category']].append(project)
-
-    return projects_by_category
+#DEPRECATED
+# def query_projects():
+#     server = server_start()
+#     search_type = 'sthpw/project'
+#     filters = []
+#     projects = server.query(search_type, filters)
+#
+#     exclude_list = ['sthpw', 'unittest', 'admin']
+#
+#     projects_by_category = collections.defaultdict(list)
+#
+#     for project in projects:
+#         if project['code'] not in exclude_list:
+#             projects_by_category[project['category']].append(project)
+#
+#     return projects_by_category
 
 
 def query_all_projects():
@@ -899,9 +1243,12 @@ def query_all_projects():
 def get_all_projects():
 
     projects_list = query_all_projects()
-    dct = collections.defaultdict(list)
+
+    dct = collections.OrderedDict()
 
     exclude_list = ['sthpw', 'unittest', 'admin']
+    if len(projects_list) == 2:
+        exclude_list = []
 
     for project in projects_list:
         if project.get('code') not in exclude_list:
@@ -921,11 +1268,34 @@ def get_sobjects(process_list=None, sobjects_list=None, get_snapshots=True, proj
     sobjects = {}
     if get_snapshots:
         process_codes = list(process_list)
-        process_codes.extend(['icon', 'attachment', 'publish'])
-        s_code = [s['code'] for s in sobjects_list]
-        snapshots_list = query_snapshots(process_codes, s_code, project_code)
-        snapshots = collections.defaultdict(list)
+        for builtin in ['icon', 'attachment', 'publish']:
+            if builtin not in process_codes:
+                process_codes.append(builtin)
 
+        # print sobjects_list
+        # search_codes = []
+        # for s in sobjects_list:
+        #     if s.get('code'):
+        #         search_codes.append(s['code'])
+        #     elif s.get('id'):
+        #         search_codes.append(s['id'])
+        #     elif s.get('name'):
+        #         search_codes.append(s['name'])
+
+        s_code = [s['code'] for s in sobjects_list]
+
+        # print s_code
+        import time
+
+        start = time.time()
+        print("start")
+        # process_codes = ['icon']
+        snapshots_list = query_snapshots(process_codes, s_code, project_code)
+
+        end = time.time()
+        print(end - start)
+
+        snapshots = collections.defaultdict(list)
         # filter snapshots by search_code
         for snapshot in snapshots_list:
             snapshots[snapshot['search_code']].append(snapshot)
@@ -934,9 +1304,9 @@ def get_sobjects(process_list=None, sobjects_list=None, get_snapshots=True, proj
         for sobject in sobjects_list:
             snapshots[sobject['code']].append(sobject)
 
-        # creating dict or ready SObjects
+        # creating dict of ready SObjects
         for k, v in snapshots.iteritems():
-            sobjects[k] = SObject(v[-1], process_codes, env.Inst.projects[project_code])
+            sobjects[k] = SObject(v[-1], process_codes, env_inst.projects[project_code])
             sobjects[k].init_snapshots(v[:-1])
     else:
         # Create list of Sobjects
@@ -957,6 +1327,7 @@ def query_snapshots(process_list=None, s_code=None, project_code=None):
         ('project_code', project_code),
         ('search_code', s_code),
     ]
+
     return server_start().query_snapshots(filters=filters_snapshots, include_files=True)
 
 
@@ -966,7 +1337,7 @@ def assets_query_new(query, stype, columns=None, project=None, limit=0, offset=0
     """
     if not columns:
         columns = []
-
+    # TODO This is old and will be deprecated
     server = server_start()
     filters = []
     expr = ''
@@ -988,77 +1359,32 @@ def assets_query_new(query, stype, columns=None, project=None, limit=0, offset=0
         filters = []
 
     built_process = server.build_search_type(stype, project)
+    # print s_code
+    import time
+
+    start = time.time()
+    print("start getting sobjects names")
 
     assets_list = server.query(built_process, filters, columns, order_bys, limit=limit, offset=offset)
+
+    end = time.time()
+    print(end - start)
 
     # print assets_list
     return assets_list
 
 
-# def assets_query(query, process, raw=False, project=None):
-#     """
-#     Query for searching assets
-#     """
-#     server = server_start()
-#     filters = []
-#     expr = ''
-#     if query[1] == 0:
-#         filters = [('name', 'EQI', query[0])]
-#     if query[1] == 1:
-#         filters = [('code', query[0])]
-#     if query[1] == 2:
-#         filters = None
-#         parents_codes = ['scenes_code', 'sets_code']
-#         for parent in parents_codes:
-#             expr += '@SOBJECT(cgshort/shot["{0}", "{1}"]), '.format(parent, query[0])
-#     if query[1] == 3:
-#         filters = [('description', 'EQI', query[0])]
-#     if query[1] == 4:
-#         filters = [('keywords', 'EQI', query[0])]
-#
-#     if query[0] == '*':
-#         filters = [[]]
-#
-#     builded_process = server.build_search_type(process, project)
-#
-#     if filters:
-#         assets = server.query(builded_process, filters)
-#     elif expr:
-#         assets = server.eval(expr)
-#     else:
-#         assets = {}
-#
-#     if raw:
-#         return assets
-#     out_assets = {
-#         'names': [],
-#         'codes': [],
-#         'description': [],
-#         'timestamp': [],
-#         'pipeline_code': [],
-#     }
-#     for asset in assets:
-#         # pprint(asset)
-#         asset_get = asset.get
-#         out_assets['names'].append(asset_get('name'))
-#         out_assets['codes'].append(asset_get('code'))
-#         out_assets['description'].append(asset_get('description'))
-#         out_assets['timestamp'].append(asset_get('timestamp'))
-#         out_assets['pipeline_code'].append(asset_get('pipeline_code'))
-#
-#     return out_assets
+def get_notes_count(sobject, process, children_stypes):
+    kwargs = {
+        'process': process,
+        'search_key': sobject.info['__search_key__'],
+        'stypes_list': children_stypes
+    }
 
+    code = tq.prepare_serverside_script(tq.get_notes_and_stypes_counts, kwargs, return_dict=True)
+    result = server_start().execute_python_script('', kwargs=code)
 
-def get_notes_count(sobject, process):
-    expr = ''
-
-    stub = server_start()
-    for proc in process:
-        expr += '{' + "@COUNT(sthpw/note['process','{0}'])".format(proc) + '},'
-
-    counts = stub.eval(expr, sobject.info['__search_key__'])
-
-    return counts
+    return result['info']['spt_ret_val']
 
 
 def users_query():
@@ -1080,17 +1406,6 @@ def users_query():
     return result
 
 
-def create_sobject(name, description, keywords, search_type):
-    data = {
-        'name': name,
-        'description': description,
-        'keywords': keywords,
-    }
-    sobject = server_start().insert(search_type, data)
-
-    return sobject
-
-
 def delete_sobject_snapshot(sobject, delete_snapshot=True, search_keys=None, files_paths=None):
     dep_list = {
         'related_types': ['sthpw/file'],
@@ -1100,7 +1415,7 @@ def delete_sobject_snapshot(sobject, delete_snapshot=True, search_keys=None, fil
                        },
     }
     try:
-        server_start().delete_sobject(sobject, list_dependencies=dep_list), 'delete_sobject_snapshot'
+        print server_start().delete_sobject(sobject, list_dependencies=dep_list), 'delete_sobject_snapshot'
         return True
     except Exception as err:
         print(err, 'delete_sobject_snapshot')
@@ -1111,64 +1426,48 @@ def delete_sobject_item(skey, delete_files=False):
     server_start().delete_sobject(skey, delete_files)
 
 
-def checkin_playblast(snapshot_code, file_name, custom_repo_path):
-    """
-    :return:
-    """
+def sobject_delete_confirm(sobject):
+    # ver_rev = gf.get_ver_rev(snapshot['version'], snapshot['revision'])
 
-    # code = [('code', 'cgshort/props?project=the_pirate&code=PROPS00001')]
-    # search_type = 'sthpw/message'
-    #
-    # message = server_query(search_type, code)
-    #
-    # from pprint import pprint
-    # pprint(message[0]['message'])
-    #
-    # import json
-    # data = json.loads(message[0]['message'])
-    #
-    # pprint(data)
+    msb = QtGui.QMessageBox(QtGui.QMessageBox.Question, 'Confirm deleting',
+                            '<p><p>Do you really want to delete sobject:</p>{0}<p>Version: {1}</p>Also remove dependencies?</p>'.format(
+                                sobject, 'VERREV'),
+                            QtGui.QMessageBox.NoButton, env_inst.ui_main)
 
-    # subs = 'cgshort/props?project=the_pirate&code=PROPS00004'
+    msb.addButton("Delete", QtGui.QMessageBox.YesRole)
+    msb.addButton("Cancel", QtGui.QMessageBox.NoRole)
 
-    # subscribe = server_start().subscribe(subs, 'sobject')
-    # print(subscribe)
+    layout = QtGui.QVBoxLayout()
 
-    # snapshot_code = 'SNAPSHOT00000213'
-    # path = 'D:/mountain.jpg'
+    widget = QtGui.QWidget()
+    widget.setLayout(layout)
 
-    playblast = server_start().add_file(
-        snapshot_code,
-        file_name,
-        file_type='playblast',
-        mode='preallocate',
-        create_icon=True,
-        # dir_naming='{project.code}/{search_type.table_name}/{sobject.name}/work/{snapshot.process}/versions/asd',
-        # file_naming='{sobject.name}_{snapshot.context}_{file.type}_v{version}.{ext}',
-        checkin_type='auto',
-        custom_repo_path=custom_repo_path,
-        do_update_versionless=True,
-    )
-    return playblast
+    msb_layot = msb.layout()
 
+    # workaround for pyside2
+    wdg_list = []
 
-def checkin_icon(snapshot_code, file_name):
-    """
-    :return:
-    """
+    for i in range(msb_layot.count()):
+        wdg = msb_layot.itemAt(i).widget()
+        if wdg:
+            wdg_list.append(wdg)
 
-    icon = server_start().add_file(snapshot_code, file_name, file_type='main', mode='copy', create_icon=True,
-                                   file_naming='{sobject.name}_{file.type}_v{version}.{ext}',
-                                   checkin_type='auto')
-    return icon
+    msb_layot.addWidget(wdg_list[0], 0, 0)
+    msb_layot.addWidget(wdg_list[1], 0, 1)
+    msb_layot.addWidget(wdg_list[2], 2, 1)
+    msb_layot.addWidget(widget, 1, 1)
 
+    delete_sobj_widget = ui_dialogs_classes.deleteSobjectWidget(sobject=sobject)
 
-def create_snapshot(search_key, context):
-    """
-    :return:
-    """
-    snapshot = server_start().create_snapshot(search_key, context)
-    return snapshot
+    layout.addWidget(delete_sobj_widget)
+
+    msb.exec_()
+    reply = msb.buttonRole(msb.clickedButton())
+
+    if reply == QtGui.QMessageBox.YesRole:
+        return delete_sobj_widget.get_data_dict()
+    else:
+        return None
 
 
 def snapshot_delete_confirm(snapshot, files):
@@ -1177,18 +1476,30 @@ def snapshot_delete_confirm(snapshot, files):
     msb = QtGui.QMessageBox(QtGui.QMessageBox.Question, 'Confirm deleting',
                             '<p><p>Do you really want to delete snapshot, with context:</p>{0}<p>Version: {1}</p>Also remove selected Files?</p>'.format(
                                 snapshot['context'], ver_rev),
-                            QtGui.QMessageBox.NoButton, env.Inst.ui_main)
+                            QtGui.QMessageBox.NoButton, env_inst.ui_main)
 
     msb.addButton("Delete", QtGui.QMessageBox.YesRole)
     msb.addButton("Cancel", QtGui.QMessageBox.NoRole)
 
     layout = QtGui.QVBoxLayout()
 
-    wdg = QtGui.QWidget()
-    wdg.setLayout(layout)
+    widget = QtGui.QWidget()
+    widget.setLayout(layout)
 
     msb_layot = msb.layout()
-    msb_layot.addWidget(wdg, 1, 1)
+
+    # workaround for pyside2
+    wdg_list = []
+
+    for i in range(msb_layot.count()):
+        wdg = msb_layot.itemAt(i).widget()
+        if wdg:
+            wdg_list.append(wdg)
+
+    msb_layot.addWidget(wdg_list[0], 0, 0)
+    msb_layot.addWidget(wdg_list[1], 0, 1)
+    msb_layot.addWidget(wdg_list[2], 2, 1)
+    msb_layot.addWidget(widget, 1, 1)
 
     checkboxes = []
     files_list = []
@@ -1211,9 +1522,9 @@ def snapshot_delete_confirm(snapshot, files):
     if reply == QtGui.QMessageBox.YesRole:
 
         if snapshot.get('repo'):
-            asset_dir = env.Env.rep_dirs[snapshot.get('repo')][0]
+            asset_dir = env_server.rep_dirs[snapshot.get('repo')][0]
         else:
-            asset_dir = env.Env.rep_dirs['asset_base_dir'][0]
+            asset_dir = env_server.rep_dirs['asset_base_dir'][0]
 
         for i, checkbox in enumerate(checkboxes):
             if checkbox.isChecked():
@@ -1227,90 +1538,194 @@ def snapshot_delete_confirm(snapshot, files):
         return False, None
 
 
-def save_confirm(paths, visible_ext, repo, update_versionless=True):
-    if update_versionless:
-        update_vs = '<p>Versionless will be <span style="color:#00aa00;"><b>Updated</b></span></p>'
-    else:
-        update_vs = '<p>Versionless will <span style="color:#aa0000;"><b>not be</b></span> Updated</p>'
+def save_confirm(item_widget, paths, repo, context, update_versionless=True, description=''):
 
-    full_path = gf.form_path(env.Env.rep_dirs[repo][0] + '/' + paths['relative_path'])
+    message = '<p>You are about to save {0} file(s).</p><p>Continue?</p>'.format(len(paths))
 
-    msb = QtGui.QMessageBox(QtGui.QMessageBox.Question, 'Confirm saving',
-                            '<p><p>Files will be saved to:</p>{0}<p>Filename: {1}</p>{2}Continue?</p>'.format(
-                                full_path,
-                                paths['file_name'] + '.' + visible_ext,
-                                update_vs
-                                ),
-                            QtGui.QMessageBox.NoButton,
-                            env.Inst.ui_main
-                            )
+    msb = QtGui.QMessageBox(
+        QtGui.QMessageBox.Question,
+        'Confirm saving',
+        message,
+        QtGui.QMessageBox.NoButton,
+        env_inst.ui_main
+        )
+
+    layout = QtGui.QVBoxLayout()
+
+    widget = QtGui.QWidget()
+    widget.setLayout(layout)
+
+    msb_layot = msb.layout()
+
+    # workaround for pyside2
+    wdg_list = []
+
+    for i in range(msb_layot.count()):
+        wdg = msb_layot.itemAt(i).widget()
+        if wdg:
+            wdg_list.append(wdg)
+
+    msb_layot.addWidget(wdg_list[0], 0, 0)
+    msb_layot.addWidget(wdg_list[1], 0, 1)
+    msb_layot.addWidget(wdg_list[2], 2, 1)
+    msb_layot.addWidget(widget, 1, 1)
+    delete_sobj_widget = ui_dialogs_classes.saveConfirmWidget(item_widget, paths, repo, context, update_versionless, description)
+
+    layout.addWidget(delete_sobj_widget)
 
     msb.addButton("Yes", QtGui.QMessageBox.YesRole)
     msb.addButton("No", QtGui.QMessageBox.NoRole)
     msb.exec_()
     reply = msb.buttonRole(msb.clickedButton())
-
     if reply == QtGui.QMessageBox.YesRole:
-        return True
+        return delete_sobj_widget.get_data_dict()
     else:
-        return False
+        return None
 
 
-def checkin_virtual_snapshot(search_key, context, ext='', visible_ext='', file_type='main', is_revision=False,
-                             repo=None, update_versionless=True, version=None):
+def get_dirs_with_naming(search_key):
+    kwargs = {
+        'search_key': search_key
+    }
+    code = tq.prepare_serverside_script(tq.get_dirs_with_naming, kwargs, return_dict=True)
+    result = server_start().execute_python_script('', kwargs=code)
 
-    if repo == 'asset_base_dir' or 'win32_local_repo_dir':
-        virtual_snapshot = server_start().get_virtual_snapshot_extended(
-            search_key,
-            context,
-            checkin_type='auto',
-            is_revision=is_revision,
-            ext=ext,
-            file_type=file_type,
-            mkdirs=False,
-            protocol=None,
-            version=version,
-        )
+    return result['info']['spt_ret_val']
 
-        if save_confirm(virtual_snapshot, visible_ext, repo, update_versionless):
-            return virtual_snapshot
-        else:
-            return None
+
+def checkin_virtual_snapshot(search_key, context, files_dict, snapshot_type='file', is_revision=False,
+                             repo=None, update_versionless=True, keep_file_name=False, version=None,
+                             checkin_type='file', ignore_keep_file_name=False, item_widget=None, description=''):
+
+    kwargs = {
+        'search_key': search_key,
+        'context': context,
+        'snapshot_type': snapshot_type,
+        'is_revision': is_revision,
+        'files_dict': files_dict,
+        'keep_file_name': keep_file_name,
+        'version': version,
+        'checkin_type': checkin_type,
+        'ignore_keep_file_name': ignore_keep_file_name,
+    }
+    code = tq.prepare_serverside_script(tq.get_virtual_snapshot_extended, kwargs, return_dict=True)
+    result = server_start().execute_python_script('', kwargs=code)
+
+    virtual_snapshot = json.loads(result['info']['spt_ret_val'])
+    data_dict = save_confirm(item_widget, virtual_snapshot, repo, context, update_versionless, description)
+    if data_dict:
+        data_dict['virtual_snapshot'] = virtual_snapshot
+        return data_dict
+    else:
+        return None
+
+
+def checkin_snapshot(search_key, context, snapshot_type=None, is_revision=False, description=None,
+                     version=None, update_versionless=True, keep_file_name=False,
+                     repo_name=None, virtual_snapshot=None, files_dict=None, mode=None, create_icon=False, files_objects=None):
+
+    # relative_paths = []
+    # file_sizes = []
+    # for fp in files_list:
+    #     file_sizes.append(gf.get_st_size(fp))
+
+    files_info = {
+        'version_files': [],
+        'version_files_paths': [],
+        'versionless_files': [],
+        'versionless_files_paths': [],
+        'files_types': [],
+        'file_sizes': [],
+        'version_metadata': [],
+        'versionless_metadata': []
+    }
+
+    repo = repo_name['value'][0]
+
+    for (k1, v1), (k2, v2), file_object in zip(virtual_snapshot, files_dict, files_objects):
+        for path_v, name_v, path_vs, name_vs, tp in zip(v1['versioned']['paths'],
+                                                        v1['versioned']['names'],
+                                                        v1['versionless']['paths'],
+                                                        v1['versionless']['names'],
+                                                        v2['t']):
+            file_path_v = u'{0}/{1}'.format(repo, path_v)
+            file_full_path_v = u'{0}/{1}'.format(file_path_v, ''.join(name_v))
+            files_info['version_files'].append(file_full_path_v)
+            files_info['version_files_paths'].append(path_v)
+            file_path_vs = u'{0}/{1}'.format(repo, path_v)
+            file_full_path_vs = u'{0}/{1}'.format(file_path_vs, ''.join(name_vs))
+            files_info['versionless_files'].append(file_full_path_vs)
+            files_info['versionless_files_paths'].append(path_vs)
+            files_info['files_types'].append(tp)
+            new_files_list = file_object.get_all_new_files_list(name_v, file_path_v)
+            # print new_files_list
+            files_info['file_sizes'].append(file_object.get_sizes_list(together=True, files_list=new_files_list))
+            files_info['version_metadata'].append(file_object.get_metadata())
+            # print name_v, path_v, 'checking_snapshot_ver'
+            # print file_object.get_metadata()
+            file_object.get_all_new_files_list(name_vs, file_path_vs)
+            files_info['versionless_metadata'].append(file_object.get_metadata())
+            # print name_vs, path_vs, 'checking_snapshot_versionless'
+            # print file_object.get_metadata()
+            # print file_object.get_sizes_list()
+            # print file_object.get_sizes_list(True)
+
+    kwargs = {
+        'search_key': search_key,
+        'context': context,
+        'snapshot_type': snapshot_type,
+        'is_revision': is_revision,
+        'description': description,
+        'version': version,
+        'update_versionless': update_versionless,
+        'keep_file_name': keep_file_name,
+        'files_info': files_info,
+        'repo_name': repo_name['value'][3],
+        'mode': mode,
+        'create_icon': create_icon,
+    }
+    # from pprint import pprint
+    # pprint(kwargs)
+    code = tq.prepare_serverside_script(tq.create_snapshot_extended, kwargs, return_dict=True)
+    result = server_start().execute_python_script('', kwargs=code)
+    # # snapshot = eval(result['info']['spt_ret_val'])
+
+    return result
 
 
 def add_repo_info(search_key, context, snapshot, repo):
+    server = server_start()
     # adding repository info
-    splitted_skey = server_start().split_search_key(search_key)
+    splitted_skey = server.split_search_key(search_key)
     filters_snapshots = [
         ('context', context),
         ('search_code', splitted_skey[1]),
         ('search_type', splitted_skey[0]),
         ('version', -1),
     ]
-    parent = server_start().query_snapshots(filters=filters_snapshots, include_files=False)[0]
+    parent = server.query_snapshots(filters=filters_snapshots, include_files=False)[0]
 
     data = {
         snapshot.get('__search_key__'): {'repo': repo['name']},
         parent.get('__search_key__'): {'repo': repo['name']},
     }
-    server_start().update_multiple(data, False)
+    server.update_multiple(data, False)
 
 
-def new_checkin_snapshot(search_key, context, ext='', file_type='main', is_current=True, is_revision=False,
-                         description=None, repo=None, version=None):
-    if repo['name'] == 'asset_base_dir' or 'win32_local_repo_dir':
-        # creating snapshot
-        snapshot = server_start().create_snapshot(
-            search_key=search_key,
-            context=context,
-            description=description,
-            is_current=is_current,
-            is_revision=is_revision,
-            snapshot_type='file',
-            version=version,
-        )
+def new_checkin_snapshot(search_key, context, ext='', snapshot_type='file', is_current=True, is_revision=False,
+                         description=None, version=None):
+    # creating snapshot
+    snapshot = server_start().create_snapshot(
+        search_key=search_key,
+        context=context,
+        description=description,
+        is_current=is_current,
+        is_revision=is_revision,
+        snapshot_type=snapshot_type,
+        version=version,
+    )
 
-        return snapshot
+    return snapshot
 
 
 def update_description(search_key, description):
@@ -1329,7 +1744,7 @@ def add_note(search_key, process, context, note, note_html, login):
         'process': process,
         'context': context,
         'note': note,
-        'note_html': gf.html_to_hex(note_html),
+        # 'note_html': gf.html_to_hex(note_html),
         'login': login,
     }
 
@@ -1439,9 +1854,300 @@ def task_priority_query(seach_key):
     return result
 
 
+def generate_web_and_icon(source_image_path, web_save_path=None, icon_save_path=None):
+
+    image = Qt4Gui.QImage(0, 0, Qt4Gui.QImage.Format_ARGB32)
+
+    if image.load(source_image_path):
+        if web_save_path:
+            web = image.scaledToWidth(640, QtCore.Qt.SmoothTransformation)
+            web.save(web_save_path)
+        if icon_save_path:
+            icon = image.scaledToWidth(120, QtCore.Qt.SmoothTransformation)
+            icon.save(icon_save_path)
+
+
+def inplace_checkin(file_paths, progress_bar, virtual_snapshot, repo_name, update_versionless, generate_icons=True, files_objects=None, padding=None):
+    check_ok = False
+
+    def copy_file(dest_path, source_path):
+        if dest_path == source_path:
+            print('Destination path is equal to source path, skipping...', dest_path)
+        else:
+            shutil.copyfile(source_path, dest_path)
+        if not os.path.exists(dest_path):
+            return False
+        else:
+            return True
+
+    versions = ['versioned']
+    if update_versionless:
+        versions.extend(['versionless'])
+
+    for i, (key, val) in enumerate(virtual_snapshot):
+        progress_bar.setValue(int(i * 100 / len(file_paths)))
+
+        for ver in versions:
+            dest_path_vers = repo_name['value'][0] + '/' + val[ver]['paths'][0]
+            # print file_paths
+            # print val[ver]['paths'], "val[ver]['paths']"
+            # print val[ver]['names']
+            dest_files_vers = files_objects[i].get_all_new_files_list(val[ver]['names'][0], dest_path_vers, new_frame_padding=padding)
+            # print dest_files_vers
+
+            # create dest dirs
+            if not os.path.exists(dest_path_vers):
+                os.makedirs(dest_path_vers)
+
+            # copy files to dest dir
+            for j, fl in enumerate(file_paths[i]):
+                progress_bar.setValue(int(j * 100 / len(file_paths[i])))
+                # print dest_files_vers[j]
+                # print fl
+                check_ok = copy_file(gf.form_path(dest_files_vers[j]), gf.form_path(fl))
+
+            if generate_icons and len(val[ver]['paths']) > 1:
+                dest_web_path_vers = gf.form_path(
+                    repo_name['value'][0] + '/' +
+                    val[ver]['paths'][1]
+                )
+                dest_web_file_vers = files_objects[i].get_all_new_files_list(val[ver]['names'][1], dest_web_path_vers)
+                # print dest_web_file_vers, 'dest_web_file_vers'
+
+                dest_icon_path_vers = gf.form_path(
+                    repo_name['value'][0] + '/' +
+                    val[ver]['paths'][2]
+                )
+                dest_icon_file_vers = files_objects[i].get_all_new_files_list(val[ver]['names'][2],
+                                                                              dest_icon_path_vers)
+                # print dest_icon_file_vers, 'dest_icon_file_vers'
+                if not os.path.exists(dest_web_path_vers):
+                    os.makedirs(dest_web_path_vers)
+                if not os.path.exists(dest_icon_path_vers):
+                    os.makedirs(dest_icon_path_vers)
+
+                # convert original to web and icon format
+                # TODO at this moment it converting twice when doing versionless
+                for k, fl in enumerate(file_paths[i]):
+                    progress_bar.setValue(int(k * 100 / len(file_paths[i])))
+                    generate_web_and_icon(fl, dest_web_file_vers[k], dest_icon_file_vers[k])
+                    # if ver == 'versioned':
+                    #     generate_web_and_icon(fl, dest_web_file_vers[k], dest_icon_file_vers[k])
+                    # else:
+                    #     copy_file(dest_files_vers[j], fl)
+
+    return check_ok
+
+
+# Checkin functions
+def checkin_file(search_key, context, snapshot_type='file', is_revision=False, description=None, version=None,
+                 update_versionless=True, file_types=None, file_names=None, file_paths=None, exts=None, subfolders=None,
+                 postfixes=None, metadata=None, padding=None, keep_file_name=False, repo_name=None, mode=None, create_icon=True, parent_wdg=None,
+                 ignore_keep_file_name=False, checkin_app='standalone', selected_objects=False, ext_type='mayaAscii',
+                 setting_workspace=False, checkin_type='file', files_dict=None, item_widget=None, files_objects=None):
+    if not files_dict:
+        files_dict = []
+
+        for i, fn in enumerate(file_names):
+            file_dict = dict()
+            file_dict['t'] = [file_types[i]]
+            file_dict['s'] = [subfolders[i]]
+            file_dict['e'] = [exts[i]]
+            file_dict['p'] = [postfixes[i]]
+            if metadata:
+                file_dict['m'] = metadata[i]
+            else:
+                file_dict['m'] = None
+
+            files_dict.append((fn, file_dict))
+
+        # extending files which can have thumbnails
+        for key, val in files_dict:
+            if gf.file_format(val['e'][0])[3] == 'preview':
+                val['t'].extend(['web', 'icon'])
+                val['s'].extend(['__preview/web', '__preview/icon'])
+                val['e'].extend(['jpg', 'png'])
+                val['p'].extend(['', ''])
+
+    from pprint import pprint
+
+    pprint(files_dict)
+    # print 'FILES DICT'
+    data_dict = checkin_virtual_snapshot(
+        search_key,
+        context,
+        snapshot_type=snapshot_type,
+        files_dict=files_dict,
+        is_revision=is_revision,
+        repo=repo_name,
+        update_versionless=update_versionless,
+        keep_file_name=keep_file_name,
+        version=version,
+        checkin_type=checkin_type,
+        ignore_keep_file_name=ignore_keep_file_name,
+        item_widget=item_widget,
+        description=description,
+    )
+    progress_bar = parent_wdg.search_widget.search_results_widget.get_progress_bar()
+
+    check_ok = False
+    if data_dict:
+        # check_ok = True
+        progress_bar.setVisible(True)
+
+        if checkin_app == 'standalone':
+            # for in-place checkin
+            check_ok = inplace_checkin(
+                file_paths,
+                progress_bar,
+                data_dict['virtual_snapshot'],
+                repo_name,
+                data_dict['update_versionless'],
+                create_icon,
+                files_objects,
+                padding=padding,
+            )
+
+        if checkin_app == 'maya':
+
+            mf.set_info_to_scene(search_key, context)
+            # print 'checkin from maya'
+            # for in-place checkin
+            check_ok, files_objects = mf.inplace_checkin(
+                progress_bar,
+                data_dict['virtual_snapshot'],
+                repo_name,
+                data_dict['update_versionless'],
+                create_icon,
+                selected_objects=selected_objects,
+                ext_type=ext_type,
+                setting_workspace=setting_workspace,
+            )
+
+        # check_ok = False
+
+        if check_ok:
+            checkin_snapshot(
+                search_key,
+                context,
+                snapshot_type=snapshot_type,
+                is_revision=is_revision,
+                description=data_dict['description'],
+                version=version,
+                update_versionless=data_dict['update_versionless'],
+                keep_file_name=keep_file_name,
+                repo_name=repo_name,
+                virtual_snapshot=data_dict['virtual_snapshot'],
+                files_dict=files_dict,
+                mode=mode,
+                create_icon=create_icon,
+                files_objects=files_objects
+            )
+            progress_bar.setValue(100)
+
+    progress_bar.setVisible(False)
+
+    return check_ok
+
+    # DEPRECATED
+    # dest_file = gf.form_path(repo['value'][0] + '/' + virtual_snapshot['relative_path'] + '/' + virtual_snapshot['file_name'] + '.' + ext)
+    # dest_path = gf.form_path(repo['value'][0] + '/' + virtual_snapshot['relative_path'])
+    #
+    # # create dest dirs
+    # if not os.path.exists(dest_path):
+    #     os.makedirs(dest_path)
+    #
+    # # if In-Place checkin copy file to dest dir
+    # shutil.copyfile(file_path, dest_file)
+    #
+    # #create empty snapshot
+    # snapshot = new_checkin_snapshot(
+    #     search_key,
+    #     context,
+    #     is_current=is_current,
+    #     is_revision=is_revision,
+    #     ext='',
+    #     description=description,
+    #     snapshot_type='file',
+    #     version=version,
+    # )
+    #
+    # # checkin saved scene to dest path
+    # # ['upload', 'copy', 'move', 'preallocate', 'inplace']
+    # server_start().add_file(
+    #     snapshot.get('code'),
+    #     dest_file,
+    #     file_type='main',
+    #     create_icon=False,
+    #     checkin_type='auto',
+    #     mode='preallocate',
+    #     custom_repo_path=repo['value'][0],
+    #     do_update_versionless=update_versionless,
+    # )
+    #
+    # # adding info about repository to snapshots
+    # add_repo_info(search_key, context, snapshot, repo)
+
+
+def checkin_playblast(snapshot_code, file_name, custom_repo_path):
+    """
+    :return:
+    """
+
+    # code = [('code', 'cgshort/props?project=the_pirate&code=PROPS00001')]
+    # search_type = 'sthpw/message'
+    #
+    # message = server_query(search_type, code)
+    #
+    # from pprint import pprint
+    # pprint(message[0]['message'])
+    #
+    # import json
+    # data = json.loads(message[0]['message'])
+    #
+    # pprint(data)
+
+    # subs = 'cgshort/props?project=the_pirate&code=PROPS00004'
+
+    # subscribe = server_start().subscribe(subs, 'sobject')
+    # print(subscribe)
+
+    # snapshot_code = 'SNAPSHOT00000213'
+    # path = 'D:/mountain.jpg'
+
+    playblast = server_start().add_file(
+        snapshot_code,
+        file_name,
+        file_type='playblast',
+        mode='preallocate',
+        create_icon=True,
+        # dir_naming='{project.code}/{search_type.table_name}/{sobject.name}/work/{snapshot.process}/versions/asd',
+        # file_naming='{sobject.name}_{snapshot.context}_{file.type}_v{version}.{ext}',
+        checkin_type='auto',
+        custom_repo_path=custom_repo_path,
+        do_update_versionless=True,
+    )
+    return playblast
+
+
+def checkin_icon(snapshot_code, file_name):
+    """
+    :return:
+    """
+
+    icon = server_start().add_file(snapshot_code, file_name, file_type='main', mode='upload', create_icon=True,
+                                   file_naming='{sobject.name}_{file.type}_v{version}.{ext}',
+                                   checkin_type='auto')
+    return icon
+
+
 # Skey functions
-def parce_skey(skey):
-    server = server_start()
+def parce_skey(skey, get_skey_and_context=False):
+
+    if get_skey_and_context:
+        skey_list = skey[7:].split('&context=')
+        return {'search_key': skey_list[0], 'context': skey_list[1]}
+
     skey_splitted = urlparse.urlparse(skey)
     skey_dict = dict(urlparse.parse_qsl(skey_splitted.query))
     skey_dict['namespace'] = skey_splitted.netloc
@@ -1450,7 +2156,7 @@ def parce_skey(skey):
     if skey_splitted.scheme == 'skey':
         if skey_dict['pipeline_code'] == 'snapshot':
             skey_dict['type'] = 'snapshot'
-            snapshot = server.query('sthpw/snapshot', [('code', skey_dict.get('code'))])
+            snapshot = server_start().query('sthpw/snapshot', [('code', skey_dict.get('code'))])
             if snapshot:
                 snapshot = snapshot[0]
                 skey_dict['pipeline_code'] = snapshot['search_type'].split('/')[-1].split('?')[0]
@@ -1470,10 +2176,11 @@ def parce_skey(skey):
 
 def generate_skey(pipeline_code=None, code=None):
     skey = 'skey://{0}/{1}?project={2}&code={3}'.format(
-        env.Env.get_namespace(),
+        env_server.get_namespace(),
         pipeline_code,
-        env.Env.get_project(),
+        env_server.get_project(),
         code
     )
 
     return skey
+

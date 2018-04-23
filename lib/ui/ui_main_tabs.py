@@ -2,44 +2,54 @@
 
 # Form implementation generated from reading ui file './ui_main_tabs.ui'
 #
-# Created: Mon Sep 05 00:35:39 2016
-#      by: pyside-uic 0.2.15 running on PySide 1.2.4
+# Created: Mon May 29 16:20:01 2017
+#      by: pyside-uic 0.2.13 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
 
-from PySide import QtCore, QtGui
+from lib.side.Qt import QtWidgets as QtGui
+from lib.side.Qt import QtCore
 
 class Ui_mainTabsForm(object):
     def setupUi(self, mainTabsForm):
         mainTabsForm.setObjectName("mainTabsForm")
-        mainTabsForm.resize(137, 229)
         self.mainTabsLayout = QtGui.QVBoxLayout(mainTabsForm)
         self.mainTabsLayout.setSpacing(0)
         self.mainTabsLayout.setContentsMargins(2, 0, 2, 3)
         self.mainTabsLayout.setObjectName("mainTabsLayout")
         self.main_tabWidget = QtGui.QTabWidget(mainTabsForm)
-        self.main_tabWidget.setStyleSheet("QTabWidget::pane {\n"
+        self.main_tabWidget.setStyleSheet("#main_tabWidget::pane {\n"
 "    border: 0px;\n"
 "}\n"
-"QTabWidget::tab-bar {\n"
+"#main_tabWidget::tab-bar {\n"
 "    alignment: center;\n"
+"}\n"
+"\n"
+"#main_tabWidget > QTabBar::tab {\n"
+"    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 rgba(175, 175, 175, 16), stop: 1 rgba(175, 175, 175, 0));\n"
+"    border: 0px solid transparent;\n"
+"    border-top-left-radius: 2px;\n"
+"    border-top-right-radius: 2px;\n"
+"    padding: 4px;\n"
+"}\n"
+"#main_tabWidget > QTabBar::tab:selected, #main_tabWidget > QTabBar::tab:hover {\n"
+"    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 rgba(255, 255, 255, 64), stop: 1 rgba(255, 255, 255, 8));\n"
+"}\n"
+"#main_tabWidget > QTabBar::tab:selected {\n"
+"    border-color: transparent;\n"
+"}\n"
+"#main_tabWidget > QTabBar::tab:!selected {\n"
+"    margin-left: 2px;\n"
 "}")
         self.main_tabWidget.setTabPosition(QtGui.QTabWidget.West)
         self.main_tabWidget.setObjectName("main_tabWidget")
-        self.checkOutTab = QtGui.QWidget()
-        self.checkOutTab.setObjectName("checkOutTab")
-        self.checkOutLayout = QtGui.QVBoxLayout(self.checkOutTab)
-        self.checkOutLayout.setSpacing(0)
-        self.checkOutLayout.setContentsMargins(0, 0, 0, 0)
-        self.checkOutLayout.setObjectName("checkOutLayout")
-        self.main_tabWidget.addTab(self.checkOutTab, "")
-        self.checkInTab = QtGui.QWidget()
-        self.checkInTab.setObjectName("checkInTab")
-        self.checkInLayout = QtGui.QVBoxLayout(self.checkInTab)
-        self.checkInLayout.setSpacing(0)
-        self.checkInLayout.setContentsMargins(0, 0, 0, 0)
-        self.checkInLayout.setObjectName("checkInLayout")
-        self.main_tabWidget.addTab(self.checkInTab, "")
+        self.checkInOutTab = QtGui.QWidget()
+        self.checkInOutTab.setObjectName("checkInOutTab")
+        self.checkInOutLayout = QtGui.QVBoxLayout(self.checkInOutTab)
+        self.checkInOutLayout.setSpacing(0)
+        self.checkInOutLayout.setContentsMargins(0, 0, 0, 0)
+        self.checkInOutLayout.setObjectName("checkInOutLayout")
+        self.main_tabWidget.addTab(self.checkInOutTab, "")
         self.myTacticTab = QtGui.QWidget()
         self.myTacticTab.setObjectName("myTacticTab")
         self.myTacticLayout = QtGui.QVBoxLayout(self.myTacticTab)
@@ -64,10 +74,9 @@ class Ui_mainTabsForm(object):
         QtCore.QMetaObject.connectSlotsByName(mainTabsForm)
 
     def retranslateUi(self, mainTabsForm):
-        mainTabsForm.setWindowTitle(QtGui.QApplication.translate("mainTabsForm", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.main_tabWidget.setTabText(self.main_tabWidget.indexOf(self.checkOutTab), QtGui.QApplication.translate("mainTabsForm", "Checkout", None, QtGui.QApplication.UnicodeUTF8))
-        self.main_tabWidget.setTabText(self.main_tabWidget.indexOf(self.checkInTab), QtGui.QApplication.translate("mainTabsForm", "Checkin", None, QtGui.QApplication.UnicodeUTF8))
-        self.main_tabWidget.setTabText(self.main_tabWidget.indexOf(self.myTacticTab), QtGui.QApplication.translate("mainTabsForm", "My Tactic", None, QtGui.QApplication.UnicodeUTF8))
-        self.main_tabWidget.setTabText(self.main_tabWidget.indexOf(self.assetsBrowserTab), QtGui.QApplication.translate("mainTabsForm", "Assets browser", None, QtGui.QApplication.UnicodeUTF8))
-        self.skeyLineEdit.setText(QtGui.QApplication.translate("mainTabsForm", "skey://", None, QtGui.QApplication.UnicodeUTF8))
+        mainTabsForm.setWindowTitle(QtGui.QApplication.translate("mainTabsForm", "Form", None))
+        self.main_tabWidget.setTabText(self.main_tabWidget.indexOf(self.checkInOutTab), QtGui.QApplication.translate("mainTabsForm", "Checkin / Checkout", None))
+        self.main_tabWidget.setTabText(self.main_tabWidget.indexOf(self.myTacticTab), QtGui.QApplication.translate("mainTabsForm", "My Tactic", None))
+        self.main_tabWidget.setTabText(self.main_tabWidget.indexOf(self.assetsBrowserTab), QtGui.QApplication.translate("mainTabsForm", "Assets browser", None))
+        self.skeyLineEdit.setText(QtGui.QApplication.translate("mainTabsForm", "skey://", None))
 

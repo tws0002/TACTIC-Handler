@@ -1,9 +1,13 @@
 # file ui_notes_classes.py
 # Notes panel
 
-import PySide.QtGui as QtGui
-import PySide.QtCore as QtCore
-import lib.environment as env
+# import PySide.QtGui as QtGui
+# import PySide.QtCore as QtCore
+# import lib.environment as env
+from lib.side.Qt import QtWidgets as QtGui
+from lib.side.Qt import QtCore
+
+from lib.environment import env_server
 import lib.ui.misc.ui_notes as ui_notes
 import ui_richedit_classes as richedit_widget
 import lib.ui.items.ui_notes_incom as ui_incom
@@ -56,7 +60,7 @@ class Ui_notesWidget(QtGui.QWidget, ui_notes.Ui_notes):
     def fill_notes(self):
         self.conversationScrollArea.close()
         self.create_scroll_area()
-        self.current_user = env.Env.get_user()
+        self.current_user = env_server.get_user()
         self.task_item.get_notes()
         self.widgets_list = []
         for proc in self.task_item.notes.itervalues():
@@ -110,7 +114,7 @@ class Ui_incomWidget(QtGui.QWidget, ui_incom.Ui_incom):
     def initial_fill(self):
 
         self.authorLabel.setText(self.note.info['login'] + ':')
-        if self.note.info['note_html']:
+        if self.note.info.get('note_html'):
             note_text = gf.hex_to_html(self.note.info['note_html'])
             self.commentLabel.setTextFormat(QtCore.Qt.RichText)
         else:
@@ -132,7 +136,7 @@ class Ui_outcomWidget(QtGui.QWidget, ui_outcom.Ui_outcom):
 
     def initial_fill(self):
         self.authorLabel.setText(self.note.info['login'] + ':')
-        if self.note.info['note_html']:
+        if self.note.info.get('note_html'):
             note_text = gf.hex_to_html(self.note.info['note_html'])
             self.commentLabel.setTextFormat(QtCore.Qt.RichText)
         else:

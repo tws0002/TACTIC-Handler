@@ -1,8 +1,11 @@
 # file ui_assets_browser_classes.py
 # Assets Browser
 
-import PySide.QtGui as QtGui
-import PySide.QtCore as QtCore
+# import PySide.QtGui as QtGui
+# import PySide.QtCore as QtCore
+from lib.side.Qt import QtWidgets as QtGui
+from lib.side.Qt import QtCore
+
 from lib.side.flowlayout import ScrollingFlowWidget
 from pprint import pprint
 import lib.tactic_classes as tc
@@ -12,7 +15,7 @@ import lib.ui.browser.ui_sobject as ui_sobject
 import lib.ui.browser.ui_sobject_info as ui_sobject_info
 import ui_tasks_classes
 import ui_addsobject_classes as addsobject_widget
-import ui_icons_classes as icons_widget
+# import ui_icons_classes as icons_widget
 
 reload(ui_assets_browser)
 
@@ -251,7 +254,7 @@ class Ui_assetsBrowserWidget(QtGui.QWidget, ui_assets_browser.Ui_assetsBrowser):
 
             effect = QtGui.QGraphicsDropShadowEffect(self.assetsTreeWidget)
             effect.setOffset(3, 3)
-            effect.setColor(QtGui.QColor(0, 0, 0, 160))
+            effect.setColor(Qt4Gui.QColor(0, 0, 0, 160))
             effect.setBlurRadius(30)
 
             self.sobj_widget.setGraphicsEffect(effect)

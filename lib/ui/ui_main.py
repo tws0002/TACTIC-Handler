@@ -2,18 +2,18 @@
 
 # Form implementation generated from reading ui file './ui_main.ui'
 #
-# Created: Mon Sep 05 00:35:38 2016
-#      by: pyside-uic 0.2.15 running on PySide 1.2.4
+# Created: Wed Dec 20 19:00:46 2017
+#      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
 
-from PySide import QtCore, QtGui
+from lib.side.Qt import QtWidgets as QtGui
+from lib.side.Qt import QtCore
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.setWindowModality(QtCore.Qt.ApplicationModal)
-        MainWindow.resize(427, 276)
         MainWindow.setMinimumSize(QtCore.QSize(427, 276))
         MainWindow.setStyleSheet("QTreeView {\n"
 "    show-decoration-selected: 1;\n"
@@ -45,14 +45,42 @@ class Ui_MainWindow(object):
 "QTreeView::item:selected{\n"
 "    selection-background-color: transparent;\n"
 "    border: 1px solid transparent;\n"
+"}\n"
+"QDockWidget::title{\n"
+"    padding: 0px;\n"
+"}\n"
+"QDockWidget::close-button, QDockWidget::float-button {\n"
+"    padding: 0px;\n"
+"}\n"
+"\n"
+"QTabWidget::pane {\n"
+"    border: 0px;\n"
+"}\n"
+"QTabBar::tab {\n"
+"    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgba(175, 175, 175, 16), stop: 1 rgba(175, 175, 175, 0));\n"
+"    border: 0px solid transparent;\n"
+"    border-top-left-radius: 2px;\n"
+"    border-top-right-radius: 2px;\n"
+"    padding: 4px;\n"
+"}\n"
+"QTabBar::tab:selected, QTabBar::tab:hover {\n"
+"    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgba(255, 255, 255, 64), stop: 1 rgba(255, 255, 255, 8));\n"
+"}\n"
+"QTabBar::tab:selected {\n"
+"    border-color: transparent;\n"
+"}\n"
+"QTabBar::tab:!selected {\n"
+"    margin-top: 2px;\n"
 "}")
         MainWindow.setLocale(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
         MainWindow.setWindowFilePath("")
+        MainWindow.setDockNestingEnabled(True)
+        MainWindow.setDockOptions(QtGui.QMainWindow.AllowNestedDocks|QtGui.QMainWindow.AllowTabbedDocks|QtGui.QMainWindow.AnimatedDocks)
         self.mainwidget = QtGui.QWidget(MainWindow)
         self.mainwidget.setObjectName("mainwidget")
         MainWindow.setCentralWidget(self.mainwidget)
         self.menubar = QtGui.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 427, 21))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 427, 25))
         self.menubar.setObjectName("menubar")
         self.menuConfig = QtGui.QMenu(self.menubar)
         self.menuConfig.setObjectName("menuConfig")
@@ -64,17 +92,24 @@ class Ui_MainWindow(object):
         self.actionConfiguration.setObjectName("actionConfiguration")
         self.actionUpdate = QtGui.QAction(MainWindow)
         self.actionUpdate.setObjectName("actionUpdate")
-        self.actionVersion = QtGui.QAction(MainWindow)
-        self.actionVersion.setObjectName("actionVersion")
         self.actionExit = QtGui.QAction(MainWindow)
         self.actionExit.setObjectName("actionExit")
         self.actionApply_to_all_Tabs = QtGui.QAction(MainWindow)
         self.actionApply_to_all_Tabs.setObjectName("actionApply_to_all_Tabs")
+        self.actionServerside_Script = QtGui.QAction(MainWindow)
+        self.actionServerside_Script.setObjectName("actionServerside_Script")
+        self.actionDock_undock = QtGui.QAction(MainWindow)
+        self.actionDock_undock.setObjectName("actionDock_undock")
+        self.actionDebug_Log = QtGui.QAction(MainWindow)
+        self.actionDebug_Log.setObjectName("actionDebug_Log")
         self.menuConfig.addAction(self.actionConfiguration)
         self.menuConfig.addAction(self.actionApply_to_all_Tabs)
+        self.menuConfig.addAction(self.actionDock_undock)
+        self.menuConfig.addSeparator()
+        self.menuConfig.addAction(self.actionServerside_Script)
+        self.menuConfig.addAction(self.actionDebug_Log)
         self.menuConfig.addSeparator()
         self.menuConfig.addAction(self.actionUpdate)
-        self.menuConfig.addAction(self.actionVersion)
         self.menuConfig.addSeparator()
         self.menuConfig.addSeparator()
         self.menuConfig.addAction(self.actionExit)
@@ -85,12 +120,14 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "TACTIC handler", None, QtGui.QApplication.UnicodeUTF8))
-        self.menuConfig.setTitle(QtGui.QApplication.translate("MainWindow", "Menu", None, QtGui.QApplication.UnicodeUTF8))
-        self.menuProject.setTitle(QtGui.QApplication.translate("MainWindow", "Project", None, QtGui.QApplication.UnicodeUTF8))
-        self.actionConfiguration.setText(QtGui.QApplication.translate("MainWindow", "Configuration", None, QtGui.QApplication.UnicodeUTF8))
-        self.actionUpdate.setText(QtGui.QApplication.translate("MainWindow", "Update", None, QtGui.QApplication.UnicodeUTF8))
-        self.actionVersion.setText(QtGui.QApplication.translate("MainWindow", "Version", None, QtGui.QApplication.UnicodeUTF8))
-        self.actionExit.setText(QtGui.QApplication.translate("MainWindow", "Exit", None, QtGui.QApplication.UnicodeUTF8))
-        self.actionApply_to_all_Tabs.setText(QtGui.QApplication.translate("MainWindow", "Current view to All Tabs", None, QtGui.QApplication.UnicodeUTF8))
+        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "TACTIC handler", None))
+        self.menuConfig.setTitle(QtGui.QApplication.translate("MainWindow", "Menu", None))
+        self.menuProject.setTitle(QtGui.QApplication.translate("MainWindow", "Project", None))
+        self.actionConfiguration.setText(QtGui.QApplication.translate("MainWindow", "Configuration", None))
+        self.actionUpdate.setText(QtGui.QApplication.translate("MainWindow", "Update", None))
+        self.actionExit.setText(QtGui.QApplication.translate("MainWindow", "Exit", None))
+        self.actionApply_to_all_Tabs.setText(QtGui.QApplication.translate("MainWindow", "Current view to All Tabs", None))
+        self.actionServerside_Script.setText(QtGui.QApplication.translate("MainWindow", "Serverside Script", None))
+        self.actionDock_undock.setText(QtGui.QApplication.translate("MainWindow", "Dock/undock", None))
+        self.actionDebug_Log.setText(QtGui.QApplication.translate("MainWindow", "Debug Log", None))
 

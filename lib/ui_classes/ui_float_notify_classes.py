@@ -1,5 +1,8 @@
-import PySide.QtGui as QtGui
-import PySide.QtCore as QtCore
+# import PySide.QtGui as QtGui
+# import PySide.QtCore as QtCore
+from lib.side.Qt import QtWidgets as QtGui
+from lib.side.Qt import QtGui as Qt4Gui
+from lib.side.Qt import QtCore
 import lib.environment as env
 import lib.ui.tasks.ui_float_notify as ui_notifications
 
@@ -20,7 +23,7 @@ class Ui_floatNotifyWidget(QtGui.QDialog, ui_notifications.Ui_floatNotify):
         self.setGeometry(screen.width() - size.width() - 5, screen.height() - size.height() - 45, self.width(),
                          self.height())
 
-        self.readSettings()
+        # self.readSettings()
 
         self.createActions()
         self.createTrayIcon()
@@ -35,7 +38,7 @@ class Ui_floatNotifyWidget(QtGui.QDialog, ui_notifications.Ui_floatNotify):
         self.trayIcon.activated.connect(self.show)
 
     def setIcon(self):
-        icon = QtGui.QIcon(':/ui_main/gliph/tactic_favicon.ico')
+        icon = Qt4Gui.QIcon(':/ui_main/gliph/tactic_favicon.ico')
         self.trayIcon.setIcon(icon)
 
     def createActions(self):
@@ -97,7 +100,7 @@ class Ui_floatNotifyWidget(QtGui.QDialog, ui_notifications.Ui_floatNotify):
         """
         Reading Settings
         """
-        self.settings.beginGroup(env.Mode.get + '/ui_main')
+        self.settings.beginGroup(env.Mode.get_mode() + '/ui_main')
         self.move(self.settings.value('float_notify_pos', self.pos()))
         self.resize(self.settings.value('float_notify_size', self.size()))
 
@@ -123,7 +126,7 @@ class Ui_floatNotifyWidget(QtGui.QDialog, ui_notifications.Ui_floatNotify):
         """
         Writing Settings
         """
-        self.settings.beginGroup(env.Mode.get + '/ui_main')
+        self.settings.beginGroup(env.Mode.get_mode() + '/ui_main')
         self.settings.setValue('float_notify_pos', self.pos())
         self.settings.setValue('float_notify_size', self.size())
         print('Done ui_float_notify settings write')

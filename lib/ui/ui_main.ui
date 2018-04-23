@@ -5,14 +5,6 @@
   <property name="windowModality">
    <enum>Qt::ApplicationModal</enum>
   </property>
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>427</width>
-    <height>276</height>
-   </rect>
-  </property>
   <property name="minimumSize">
    <size>
     <width>427</width>
@@ -53,6 +45,32 @@ QTreeView::item:selected:!active {
 QTreeView::item:selected{
     selection-background-color: transparent;
     border: 1px solid transparent;
+}
+QDockWidget::title{
+	padding: 0px;
+}
+QDockWidget::close-button, QDockWidget::float-button {
+	padding: 0px;
+}
+
+QTabWidget::pane {
+    border: 0px;
+}
+QTabBar::tab {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgba(175, 175, 175, 16), stop: 1 rgba(175, 175, 175, 0));
+    border: 0px solid transparent;
+    border-top-left-radius: 2px;
+    border-top-right-radius: 2px;
+    padding: 4px;
+}
+QTabBar::tab:selected, QTabBar::tab:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgba(255, 255, 255, 64), stop: 1 rgba(255, 255, 255, 8));
+}
+QTabBar::tab:selected {
+    border-color: transparent;
+}
+QTabBar::tab:!selected {
+    margin-top: 2px;
 }</string>
   </property>
   <property name="locale">
@@ -61,6 +79,12 @@ QTreeView::item:selected{
   <property name="windowFilePath">
    <string notr="true"/>
   </property>
+  <property name="dockNestingEnabled">
+   <bool>true</bool>
+  </property>
+  <property name="dockOptions">
+   <set>QMainWindow::AllowNestedDocks|QMainWindow::AllowTabbedDocks|QMainWindow::AnimatedDocks</set>
+  </property>
   <widget class="QWidget" name="mainwidget"/>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -68,7 +92,7 @@ QTreeView::item:selected{
      <x>0</x>
      <y>0</y>
      <width>427</width>
-     <height>21</height>
+     <height>25</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuConfig">
@@ -77,9 +101,12 @@ QTreeView::item:selected{
     </property>
     <addaction name="actionConfiguration"/>
     <addaction name="actionApply_to_all_Tabs"/>
+    <addaction name="actionDock_undock"/>
+    <addaction name="separator"/>
+    <addaction name="actionServerside_Script"/>
+    <addaction name="actionDebug_Log"/>
     <addaction name="separator"/>
     <addaction name="actionUpdate"/>
-    <addaction name="actionVersion"/>
     <addaction name="separator"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
@@ -105,11 +132,6 @@ QTreeView::item:selected{
     <string>Update</string>
    </property>
   </action>
-  <action name="actionVersion">
-   <property name="text">
-    <string>Version</string>
-   </property>
-  </action>
   <action name="actionExit">
    <property name="text">
     <string>Exit</string>
@@ -118,6 +140,21 @@ QTreeView::item:selected{
   <action name="actionApply_to_all_Tabs">
    <property name="text">
     <string>Current view to All Tabs</string>
+   </property>
+  </action>
+  <action name="actionServerside_Script">
+   <property name="text">
+    <string>Serverside Script</string>
+   </property>
+  </action>
+  <action name="actionDock_undock">
+   <property name="text">
+    <string>Dock/undock</string>
+   </property>
+  </action>
+  <action name="actionDebug_Log">
+   <property name="text">
+    <string>Debug Log</string>
    </property>
   </action>
  </widget>

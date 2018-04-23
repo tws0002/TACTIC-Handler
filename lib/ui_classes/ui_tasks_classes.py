@@ -1,8 +1,12 @@
 # file ui_tasks_classes.py
 # Main Window of tasks
 
-import PySide.QtGui as QtGui
-import PySide.QtCore as QtCore
+# import PySide.QtGui as QtGui
+# import PySide.QtCore as QtCore
+from lib.side.Qt import QtWidgets as QtGui
+from lib.side.Qt import QtGui as Qt4Gui
+from lib.side.Qt import QtCore
+
 import lib.ui.tasks.ui_tasks as ui_tasks
 import ui_richedit_classes as richedit_widget
 import ui_notes_classes as notes_widget
@@ -79,9 +83,9 @@ class Ui_tasksWidget(QtGui.QWidget, ui_tasks.Ui_tasks):
     def fill_status(self):
         status_combo_box = self.statusComboBox.model()
         for value, color in zip(self.task_process['process'], self.task_process['color']):
-            item = QtGui.QStandardItem(u'{0}'.format(value))
+            item = Qt4Gui.QStandardItem(u'{0}'.format(value))
             sc = gf.hex_to_rgb(color, tuple=True)
-            sc_item = QtGui.QColor(sc[0], sc[1], sc[2], 128)
+            sc_item = Qt4Gui.QColor(sc[0], sc[1], sc[2], 128)
             item.setBackground(sc_item)
             item.setData(sc_item, 1)
             item.setData(value, 2)
@@ -112,8 +116,8 @@ class Ui_tasksWidget(QtGui.QWidget, ui_tasks.Ui_tasks):
             color = r[i], g[i], b, a
             pc.append(color)
         for i, (label, value) in enumerate(self.priority):
-            item = QtGui.QStandardItem(u'{0}, {1}'.format(label, value))
-            color = QtGui.QColor(pc[i - 1][0], pc[i - 1][1], pc[i - 1][2], pc[i - 1][3])
+            item = Qt4Gui.QStandardItem(u'{0}, {1}'.format(label, value))
+            color = Qt4Gui.QColor(pc[i - 1][0], pc[i - 1][1], pc[i - 1][2], pc[i - 1][3])
             if i > 0:
                 item.setBackground(color)
                 item.setData(color, 1)
@@ -138,8 +142,9 @@ class Ui_tasksWidget(QtGui.QWidget, ui_tasks.Ui_tasks):
         self.endDateTimeEdit.setDateTime(current_datetime)
 
         for user in self.users.itervalues():
-            self.assignedToComboBox.addItem('{last_name} {first_name}, {login}'.format(**user).decode('utf-8'))
-            self.superviserComboBox.addItem('{last_name} {first_name}, {login}'.format(**user).decode('utf-8'))
+            print user
+            # self.assignedToComboBox.addItem(u'{last_name} {first_name}, {login}'.format(**user).decode('utf-8'))
+            # self.superviserComboBox.addItem(u'{last_name} {first_name}, {login}'.format(**user).decode('utf-8'))
 
     def fill_tasks_info(self):
         current_item = self.processTreeWidget.currentItem().data(0, QtCore.Qt.UserRole)
