@@ -1,15 +1,15 @@
 # main.py
 # Start here
 
-CURRENT_PATH = 'D:/APS/OneDrive/Dropbox/Work/CGProjects/tacticbase_dev/TACTIC-Handler'
+CURRENT_PATH = '/home/krivospickiy_a/MEGA/Work/CGProjects/tacticbase_dev/TACTIC-handler'
 
 import sys
 if CURRENT_PATH not in sys.path:
     sys.path.append(CURRENT_PATH)
-from lib.environment import env_mode
-env_mode.set_current_path(CURRENT_PATH)
-env_mode.set_mode('maya')
-import lib.ui_classes.ui_maya_dock as main
+import thlib.environment as thenv
+thenv.env_mode.set_current_path(CURRENT_PATH)
+thenv.env_mode.set_mode('maya')
+import thlib.ui_classes.ui_maya_dock as main
 
 reload(main)
 
@@ -24,3 +24,6 @@ reload(main)
 hotkeys = None
 
 main.startup(hotkeys=hotkeys)
+
+# from lib.environment import env_inst
+# print env_inst.ui_maya_dock.status_bar
